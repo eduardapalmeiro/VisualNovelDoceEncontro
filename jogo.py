@@ -119,11 +119,13 @@ class Personagem:
     id: int
     nome: str
     expressao: str = "normal"
-    _afinidade: int = 0
+    _afinidade = 0
 
-    @property
-    def afinidade(self): return self._afinidade
-    def alterar_afinidade(self, valor): self._afinidade = max(0, min(100, self._afinidade + valor))
+    def afinidade(self) -> int:
+        return self._afinidade
+
+    def alterar_afinidade(self, valor):
+        self._afinidade = max(0, min(100, self._afinidade + valor))
 
     def desenhar_sprite(self, surf, x, y, largura=240, altura=480):
         chave = self.nome.lower() + self.expressao
@@ -153,88 +155,277 @@ class Personagem:
         surf.blit(nome_surf, (cx - nome_surf.get_width()//2, y + altura - 28))
 
 @dataclass
+class Amigo(Personagem):
+    nivelDeAmizade: int
+
+    @property
+    def nivelDeAmizade(self):
+        return self._afinidade
+
+    def afinidade(self) -> int:
+        return self.nivelDeAmizade
+
+@dataclass
+class InteresseAmoroso(Personagem):
+    nivelDeAmizade: int
+    nivelDeAfinidade: int
+
+    @property
+    def nivelDeAmizade(self):
+        return self._afinidade
+
+    def afinidade(self) -> int:
+        return self.nivelDeAmizade
+
+    def alterar_afinidade(self, valor):
+        super().alterar_afinidade(valor)
+        self.nivelDeAmor = max(0, min(100, self.nivelDeAmor + valor))
+
+@dataclass
+class Escolhas:
+    textoDaOpcao: str
+    proximaCenaID: int
+    impactoAfinidade: int
+
+    def selecionarOpcao(self):
+        return self.proximaCenaID, self.impactoAfinidade
+
+@dataclass
 class Cena:
     personagem: Personagem | None
     texto: str
-    escolhas: list = field(default_factory=list)
-    fundo: str = "salaaula"
-    musica: str | None = None
+    escolhas: Escolhas
 
 @dataclass
 class Jogador:
-    nomej: str = "Você"
+    nomej: str = input("Insira seu nome: ")
 
-# ─── Objetos globais ───────────────────────────────────────────────────────────
+@dataclass
+class Fundo:
+    idFundo: int
+    nomeCenario: str
+    caminhoImagem: str
+
+    def exibir(self, surf):
+        img = IMGS.get(self.caminhoImagem)
+        if img:
+            surf.blit(pygame.transform.smoothscale(img, (WIDTH, HEIGHT)), (0, 0))
+        else:
+            gradiente_vertical(surf, (60, 40, 70), (120, 80, 100), (0, 0, WIDTH, HEIGHT))
+
+
+@dataclass
+class Audio:
+    nomeDoArquivo: str
+    volume: float
+    loop: bool
+
+    def tocar(self):
+        if not self.nomeDoArquivo:
+            return
+        try:
+            pygame.mixer.music.load(self.nomeDoArquivo)
+            pygame.mixer.music.set_volume(self.volume)
+            pygame.mixer.music.play(-1 if self.loop else 0)
+            self._carregado = True
+        except:
+            self._carregado = False
+
+    def pausar(self):
+        if self._carregado:
+            try: pygame.mixer.music.pause()
+            except: pass
+
+    def parar(self):
+        if self._carregado:
+            try: pygame.mixer.music.stop()
+            except: pass
+    
+@dataclass
+class Menu:
+    opcoesMenu: list
+    volumeMusica: int
+
+    def get_rects(self):
+        return [pygame.Rect(WIDTH//2-180, 340 + i*80, 360, 52) for i in range(len(self.opcoesMenu))]
+
+    def exibirMenu(self, surf, hover_index):
+        gradiente_vertical(surf, (30, 15, 25), (80, 30, 50), (0, 0, WIDTH, HEIGHT))
+        for p in PARTICULAS: p.atualizar(); p.desenhar(surf)
+        titulo = FONTES["titulo"].render("Doce Encontro", True, ROSA_CLARO)
+        surf.blit(titulo, (WIDTH//2 - titulo.get_width()//2, 150))
+        sub = FONTES["subtitulo"].render("~ Uma história de amor na faculdade ~", True, CREME)
+        surf.blit(sub, (WIDTH//2 - sub.get_width()//2, 220))
+
+        rotulos = {"Novo Jogo": "♥  Começar História", "Carregar": "✿  Sair"}
+        for i, (op, rect) in enumerate(zip(self.opcoesMenu, self.get_rects())):
+            hover = (i == hover_index)
+            desenhar_retangulo_arredondado(surf, ROSA_ESCURO if hover else (50, 25, 40), rect, 16, 220)
+            if hover: pygame.draw.rect(surf, DOURADO, rect, 2, border_radius=16)
+            render = FONTES["escolha"].render(rotulos.get(op, op), True, ROSA_CLARO if hover else BRANCO)
+            surf.blit(render, (rect.centerx - render.get_width()//2, rect.y + 15))
+
+        versao = FONTES["ui"].render("v1.0", True, (100, 70, 80))
+        surf.blit(versao, (WIDTH - versao.get_width() - 10, HEIGHT - 25))
+
+    def clicarNovoJogo(self):
+        return "jogo"
+
+    def clicarCarregarJogo(self):
+        return "jogo"
+
+    def ajustarVolume(self, novoVolume: float):
+        self.volumeMusica = novoVolume
+
+    def clicarSair(self):
+        return False
+
+@dataclass
+class Pause:
+    visivel: bool = False
+
+    def exibirPainel(self, surf):
+        if not self.visivel:
+            return
+        velado = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        velado.fill((10, 5, 10, 180))
+        surf.blit(velado, (0, 0))
+        desenhar_retangulo_arredondado(surf, (40, 20, 30), (WIDTH//2-200, HEIGHT//2-120, 400, 240), 18, 235)
+        titulo = FONTES["nome"].render("⏸ Pausado", True, ROSA_CLARO)
+        surf.blit(titulo, (WIDTH//2 - titulo.get_width()//2, HEIGHT//2 - 95))
+        dica = FONTES["ui"].render("Pressione P ou ESC para continuar", True, CREME)
+        surf.blit(dica, (WIDTH//2 - dica.get_width()//2, HEIGHT//2))
+
+    def clicarRetomar(self):
+        self.visivel = False
+
+    def clicarSalvarProgresso(self):
+        pass
+
+    def clicarSairParaMenu(self):
+        self.visivel = False
+        return "menu"
+    
+@dataclass
+class GerenciadorDeAmbiente:
+    fundoAtual: Fundo
+    audioAtual: Audio
+    cenaAtual: Cena
+
+    def mudarFundo(self, novoFundo: Fundo):
+        self.fundoAtual = novoFundo
+
+    def trocarMusica(self, novaMusica: Audio):
+        if self.audioAtual:
+            self.audioAtual.parar()
+        self.audioAtual = novaMusica
+        self.audioAtual.tocar()
+
+    def carregarCena(self, novaCena: Cena):
+        self.cenaAtual = novaCena
+
+# ─── Objetos ───────────────────────────────────────────────────────────
 jogador = Jogador()
-ta = Personagem(1, "Talita")
-va = Personagem(2, "Victoria")
-vr = Personagem(3, "Victor")
-ts = Personagem(4, "Talisson")
-pfsr = Personagem(5, "Fabiano")
-bff  = Personagem(6, "Catarina")
-PAQUERAS = [ta, va, vr, ts]
 
-# ─── Cenas ─────────────────────────────────────────────────────────────────────
-CENAS = {
-    0: Cena(None, "Primeiro dia no novo colégio. O coração acelera enquanto você empurra o portão...",
-            [("Entrar com confiança", 1, 0), ("Hesitar na entrada", 2, 0)], "patio"),
-    1: Cena(None, f"{jogador.nomej} respira fundo e entra com um sorriso. Imediatamente esbarra em alguém.",
-            [("Continuar...", 3, 0)], "patio"),
-    2: Cena(None, f"Enquanto {jogador.nomej} observa o pátio nervosa, uma voz animada soa atrás dela.",
-            [("Continuar...", 3, 0)], "patio"),
-    3: Cena(bff, "Ei! Você é nova aqui, né? Eu sou a Catarina! Bem-vinda ao colégio! Posso te mostrar o caminho?",
-            [("Aceitar animadamente", 4, 0), ("Agradecer timidamente", 4, 0)], "patio"),
-    4: Cena(None, "Catarina te guia pelos corredores até a sala de aula. Você logo percebe alguns rostos que chamam atenção.",
-            [("Continuar...", 5, 0)], "salaaula"),
-    5: Cena(ta, "Oi! Você deve ser a nova aluna. Eu sou a Talita! Se precisar de qualquer coisa, pode me chamar.",
-            [("'Que gentil, obrigada!'", 6, 3), ("'Oi Talita, prazer!'", 6, 2), ("Sorrir sem responder", 6, 0)], "salaaula"),
-    6: Cena(ta, "Talita sorri de volta e te aponta o lugar vago ao lado dela. 'Pode sentar aqui se quiser!'",
-            [("Sentar do lado dela", 7, 4), ("Agradecer e sentar", 7, 2)], "salaaula"),
-    7: Cena(pfsr, "Bom dia, turma! Sou o professor Fabiano. Hoje temos uma nova aluna. Por favor, se apresente.",
-            [("Me apresentar com entusiasmo", 8, 0), ("Me apresentar de forma simples", 9, 0)], "salaaula"),
-    8: Cena(ta, "Talita te aplaude discretamente com um sorriso genuíno. 'Gostei de você, é muito espontânea!'",
-            [("Sorrir de volta", 10, 3), ("Agradecer levemente", 10, 1)], "salaaula"),
-    9: Cena(ta, "Talita te olha com uma expressão gentil e acena com a cabeça, aprovando.",
-            [("Continuar...", 10, 2)], "salaaula"),
-    10: Cena(None, "Toca o sinal para o intervalo. A Catarina aparece correndo.",
-            [("Continuar...", 11, 0)], "salaaula"),
-    11: Cena(bff, "'Vamos pra cafeteria? Dizem que o crepe de chocolate aqui é incrível!'",
-            [("'Adoro chocolate, vamos!'", 12, 0), ("'Prefiro ir ao pátio.'", 13, 0)], "salaaula"),
-    12: Cena(ta, "Na cafeteria, você encontra a Talita sentada sozinha. Ela acena e chama você para sentar junto.",
-            [("Sentar com a Talita", 14, 4), ("Sentar com a Catarina", 15, 0)], "cafeteria"),
-    13: Cena(None, "No pátio, você avista a Talita conversando com a Victoria perto de um banco.",
-            [("Aproximar delas", 16, 2), ("Ficar de longe", 10, 0)], "patio"),
-    14: Cena(ta, "'Sabia que você ia ser legal quando te vi entrar na sala. Me conta de você!'",
-            [("Contar sobre seus hobbies", 17, 4), ("Perguntar sobre ela antes", 18, 5)], "cafeteria"),
-    15: Cena(bff, "Catarina te conta todas as fofocas do colégio com uma energia contagiante.",
-            [("Continuar...", 19, 0)], "cafeteria"),
-    16: Cena(va, "Victoria te olha de cima a baixo. 'Ah, a novata. Talita já me falou de você.'",
-            [("'Só coisas boas, espero!'", 17, 2), ("Ficar em silêncio", 19, 0)], "patio"),
-    17: Cena(ta, "Talita ri e os olhos dela brilham. 'Você é incrível! Vamos ser grandes amigas, eu sei!'",
-            [("'Tomara que sim!'", 19, 5), ("Sorrir de coração", 19, 4)], "cafeteria"),
-    18: Cena(ta, "Talita fica surpresa e feliz que você perguntou. Ela começa a falar animada sobre música e livros.",
-            [("Continuar...", 17, 3)], "cafeteria"),
-    19: Cena(None, "O sinal toca marcando o fim das aulas. Você sai pensando nos novos rostos... especialmente em um deles.",
-            [("Continuar...", 20, 0)], "patio"),
-    20: Cena(None, "Fim do Capítulo 1 ♥\n\nFoi um primeiro dia cheio de surpresas.\nSua história está apenas começando...", [], "patio"),
+talita  = InteresseAmoroso(1, "Talita")
+victoria = InteresseAmoroso(2, "Victoria")
+victor   = InteresseAmoroso(3, "Victor")
+talisson = InteresseAmoroso(4, "Talisson")
+fabiano  = Amigo(5, "Fabiano")
+catarina = Amigo(6, "Catarina")
+
+PAQUERAS = [talita, victoria, victor, talisson]
+
+saladeaula = Fundo(101, "Sala De Aula", "salaaula")
+fundo_cafeteria = Fundo(102, "Cafeteria", "cafeteria")
+fundo_patio = Fundo(103, "Pátio", "patio")
+
+musica_sala = Audio("ambient_romance.mp3", volume=0.7, loop=True)
+
+ESCOLHAS = {
+    0:  [Escolhas("Entrar com confiança", 1, 0), Escolhas("Hesitar na entrada", 2, 0)],
+    1:  [Escolhas("Continuar...", 3, 0)],
+    2:  [Escolhas("Continuar...", 3, 0)],
+    3:  [Escolhas("Aceitar animadamente", 4, 0), Escolhas("Agradecer timidamente", 4, 0)],
+    4:  [Escolhas("Continuar...", 5, 0)],
+    5:  [Escolhas("'Que gentil, obrigada!'", 6, 3), Escolhas("'Oi Talita, prazer!'", 6, 2), Escolhas("Sorrir sem responder", 6, 0)],
+    6:  [Escolhas("Sentar do lado dela", 7, 4), Escolhas("Agradecer e sentar", 7, 2)],
+    7:  [Escolhas("Me apresentar com entusiasmo", 8, 0), Escolhas("Me apresentar de forma simples", 9, 0)],
+    8:  [Escolhas("Sorrir de volta", 10, 3), Escolhas("Agradecer levemente", 10, 1)],
+    9:  [Escolhas("Continuar...", 10, 2)],
+    10: [Escolhas("Continuar...", 11, 0)],
+    11: [Escolhas("'Adoro chocolate, vamos!'", 12, 0), Escolhas("'Prefiro ir ao pátio.'", 13, 0)],
+    12: [Escolhas("Sentar com a Catarina", 15, 0)],
+    13: [Escolhas("Aproximar delas", 16, 2), Escolhas("Ficar de longe", 10, 0)],
+    14: [Escolhas("Contar sobre seus hobbies", 17, 4), Escolhas("Perguntar sobre ela antes", 18, 5)],
+    15: [Escolhas("Continuar...", 19, 0)],
+    16: [Escolhas("'Só coisas boas, espero!'", 17, 2), Escolhas("Ficar em silêncio", 19, 0)],
+    17: [Escolhas("'Tomara que sim!'", 19, 5), Escolhas("Sorrir de coração", 19, 4)],
+    18: [Escolhas("Continuar...", 17, 3)],
+    19: [Escolhas("Continuar...", 20, 0)],
+    20: [],
 }
 
+FUNDO_DA_CENA = {
+    0: fundo_patio, 1: fundo_patio, 2: fundo_patio, 3: fundo_patio,
+    4: saladeaula, 5: saladeaula, 6: saladeaula, 7: saladeaula,
+    8: saladeaula, 9: saladeaula, 10: saladeaula, 11: saladeaula,
+    12: fundo_cafeteria, 13: fundo_patio, 14: fundo_cafeteria,
+    15: fundo_cafeteria, 16: fundo_patio, 17: fundo_cafeteria,
+    18: fundo_cafeteria, 19: fundo_patio, 20: fundo_patio,
+}
+
+CENAS = {
+    0: Cena(None, "Primeiro dia no novo colégio. O coração acelera enquanto você empurra o portão...", ESCOLHAS[0]),
+    1: Cena(None, f"{jogador.nomeJogador} respira fundo e entra com um sorriso. Imediatamente esbarra em alguém.", ESCOLHAS[1]),
+    2: Cena(None, f"Enquanto {jogador.nomeJogador} observa o pátio nervosa, uma voz animada soa atrás dela.", ESCOLHAS[2]),
+    3: Cena(catarina, "Ei! Você é nova aqui, né? Eu sou a Catarina! Bem-vinda ao colégio! Posso te mostrar o caminho?", ESCOLHAS[3]),
+    4: Cena(None, "Catarina te guia pelos corredores até a sala de aula. Você logo percebe alguns rostos que chamam atenção.", ESCOLHAS[4]),
+    5: Cena(talita, "Oi! Você deve ser a nova aluna. Eu sou a Talita! Se precisar de qualquer coisa, pode me chamar.", ESCOLHAS[5]),
+    6: Cena(talita, "Talita sorri de volta e te aponta o lugar vago ao lado dela. 'Pode sentar aqui se quiser!'", ESCOLHAS[6]),
+    7: Cena(fabiano, "Bom dia, turma! Sou o professor Fabiano. Hoje temos uma nova aluna. Por favor, se apresente.", ESCOLHAS[7]),
+    8: Cena(talita, "Talita te aplaude discretamente com um sorriso genuíno. 'Gostei de você, é muito espontânea!'", ESCOLHAS[8]),
+    9: Cena(talita, "Talita te olha com uma expressão gentil e acena com a cabeça, aprovando.", ESCOLHAS[9]),
+    10: Cena(None, "Toca o sinal para o intervalo. A Catarina aparece correndo.", ESCOLHAS[10]),
+    11: Cena(catarina, "'Vamos pra cafeteria? Dizem que o crepe de chocolate aqui é incrível!'", ESCOLHAS[11]),
+    12: Cena(talita, "Na cafeteria, você encontra a Talita sentada sozinha. Ela acena e chama você para sentar junto.\nVocê pensa: 'Você é a aluna nova?'", ESCOLHAS[12]),
+    13: Cena(None, "No pátio, você avista a Talita conversando com a Victoria perto de um banco.", ESCOLHAS[13]),
+    14: Cena(talita, "'Sabia que você ia ser legal quando te vi entrar na sala. Me conta de você!'", ESCOLHAS[14]),
+    15: Cena(catarina, "Catarina te conta todas as fofocas do colégio com uma energia contagiante.", ESCOLHAS[15]),
+    16: Cena(victoria, "Victoria te olha de cima a baixo. 'Ah, a novata. Talita já me falou de você.'", ESCOLHAS[16]),
+    17: Cena(talita, "Talita ri e os olhos dela brilham. 'Você é incrível! Vamos ser grandes amigas, eu sei!'", ESCOLHAS[17]),
+    18: Cena(talita, "Talita fica surpresa e feliz que você perguntou. Ela começa a falar animada sobre música e livros.", ESCOLHAS[18]),
+    19: Cena(None, "O sinal toca marcando o fim das aulas. Você sai pensando nos novos rostos... especialmente em um deles.", ESCOLHAS[19]),
+    20: Cena(None, "Fim do Capítulo 1 ♥\n\nFoi um primeiro dia cheio de surpresas.\nSua história está apenas começando...", ESCOLHAS[20]),
+}
+
+gerenteAmbiente = GerenciadorDeAmbiente(saladeaula, musica_sala)
 # ─── Motor do jogo ──────────────────────────────────────────────────────────────
+@dataclass
 class GerenciadorDeJogo:
-    def __init__(self):
-        self.velocidade_texto = 2
-        self.reiniciar_jogo()
+    estadoAtual = str
+    jogador = Jogador
+    gerenciadorAmbiente = GerenciadorDeAmbiente
+
+    @property
+    def estado(self):
+        return self.estadoAtual
+
+    @estado.setter
+    def estado(self, valor):
+        self.estadoAtual = valor
 
     def reiniciar_jogo(self):
-        self.estado = "menu"
+        self.estadoAtual = "menu"
         self.menu_hover, self.escolha_hover = -1, -1
         for p in PAQUERAS: p._afinidade = 0
         self._iniciar_cena(0)
 
-    def _cena(self): return CENAS.get(self.cena_atual_id)
-    
+    def _cena(self):
+        return CENAS.get(self.cena_atual_id)
+
     def get_menu_rects(self):
-        return [pygame.Rect(WIDTH//2-180, 340 + i*80, 360, 52) for i in range(2)]
+        return Menu.get_rects()
 
     def get_escolha_rects(self):
         c = self._cena()
@@ -244,6 +435,10 @@ class GerenciadorDeJogo:
 
     def _iniciar_cena(self, id_cena):
         self.cena_atual_id = id_cena
+        self.gerenciadorAmbiente.carregarCena(self._cena())
+        novo_fundo = FUNDO_DA_CENA.get(id_cena)
+        if novo_fundo:
+            self.gerenciadorAmbiente.mudarFundo(novo_fundo)
         self.texto_completo, self.texto_exibido = self._cena().texto, ""
         self.indice_texto, self.timer_texto = 0, 0
         self.texto_pronto, self.fade_in, self.fade_alpha = False, True, 255
@@ -260,11 +455,30 @@ class GerenciadorDeJogo:
                 self.texto_exibido = self.texto_completo[:self.indice_texto]
                 if self.indice_texto >= len(self.texto_completo): self.texto_pronto = True
 
-    # ── Renderização ─────────────────────────────────────────────────────────
+
+    def iniciarNovoJogo(self, nomeJogador: str = None):
+        if nomeJogador:
+            self.jogador.nomeJogador = nomeJogador
+        self.estadoAtual = "jogo"
+        self._iniciar_cena(0)
+
+    def pausarJogo(self):
+        Pause.visivel = True
+        self._estado_antes_pausa = self.estadoAtual
+
+    def despausarJogo(self):
+        Pause.visivel = False
+
+    def irParaMenu(self):
+        Pause.visivel = False
+        self.estadoAtual = "menu"
+
+    def atualizar(self):
+        self._atualizar_texto()
+
+
     def _desenhar_fundo(self, surf):
-        img = IMGS.get(self._cena().fundo)
-        if img: surf.blit(pygame.transform.smoothscale(img, (WIDTH, HEIGHT)), (0, 0))
-        else: gradiente_vertical(surf, (60, 40, 70), (120, 80, 100), (0, 0, WIDTH, HEIGHT))
+        self.gerenciadorAmbiente.fundoAtual.exibir(surf)
 
     def _desenhar_caixa(self, surf):
         c, box_y, box_h = self._cena(), HEIGHT - 220, 215
@@ -290,14 +504,15 @@ class GerenciadorDeJogo:
             surf.blit(seta, (WIDTH - seta.get_width() - 30, box_y + box_h - 28))
 
     def _desenhar_escolhas(self, surf):
-        for i, (rect, (texto, _, delta)) in enumerate(zip(self.get_escolha_rects(), self._cena().escolhas)):
+        for i, (rect, escolha) in enumerate(zip(self.get_escolha_rects(), self._cena().escolhas)):
             hover = (i == self.escolha_hover)
             desenhar_retangulo_arredondado(surf, ROSA_ESCURO if hover else (40, 20, 30), rect, 14, 225)
             if hover: pygame.draw.rect(surf, DOURADO, rect, 2, border_radius=14)
-            
-            t_render = FONTES["escolha"].render(texto, True, ROSA_CLARO if hover else BRANCO)
+
+            t_render = FONTES["escolha"].render(escolha.textoDaOpcao, True, ROSA_CLARO if hover else BRANCO)
             surf.blit(t_render, (rect.centerx - t_render.get_width()//2, rect.y + 13))
-            
+
+            delta = escolha.impactoAfinidade
             if delta != 0:
                 ic = FONTES["coracao"].render(f"♥{'+' if delta>0 else ''}{delta}", True, ROSA_CLARO if delta>0 else (200,150,150))
                 surf.blit(ic, (rect.right - 40, rect.y + 13))
@@ -306,30 +521,15 @@ class GerenciadorDeJogo:
         desenhar_retangulo_arredondado(surf, (10, 5, 10), (0, 0, WIDTH, 50), 0, 180)
         surf.blit(FONTES["ui"].render("✿ Doce Encontro ✿", True, ROSA_CLARO), (10, 15))
         x = 220
-        for p in [p for p in PAQUERAS if p.afinidade > 0]:
+        for p in [p for p in PAQUERAS if p.afinidade() > 0]:
             surf.blit(FONTES["ui"].render(f"♥ {p.nome}", True, ROSA_CLARO), (x, 6))
             desenhar_retangulo_arredondado(surf, CINZA_MEDIO, (x, 28, 130, 10), 5, 180)
-            desenhar_retangulo_arredondado(surf, ROSA, (x, 28, int(130*(p.afinidade/100)), 10), 5, 230)
-            surf.blit(FONTES["ui"].render(f"{p.afinidade}%", True, ROSA_CLARO), (x + 135, 24))
+            desenhar_retangulo_arredondado(surf, ROSA, (x, 28, int(130*(p.afinidade()/100)), 10), 5, 230)
+            surf.blit(FONTES["ui"].render(f"{p.afinidade()}%", True, ROSA_CLARO), (x + 135, 24))
             x += 200
 
     def desenhar_menu(self, surf):
-        gradiente_vertical(surf, (30, 15, 25), (80, 30, 50), (0, 0, WIDTH, HEIGHT))
-        for p in PARTICULAS: p.atualizar(); p.desenhar(surf)
-        titulo = FONTES["titulo"].render("Doce Encontro", True, ROSA_CLARO)
-        surf.blit(titulo, (WIDTH//2 - titulo.get_width()//2, 150))
-        sub = FONTES["subtitulo"].render("~ Uma história de amor no colégio ~", True, CREME)
-        surf.blit(sub, (WIDTH//2 - sub.get_width()//2, 220))
-
-        for i, (op, rect) in enumerate(zip(["♥  Começar História", "✿  Sair"], self.get_menu_rects())):
-            hover = (i == self.menu_hover)
-            desenhar_retangulo_arredondado(surf, ROSA_ESCURO if hover else (50, 25, 40), rect, 16, 220)
-            if hover: pygame.draw.rect(surf, DOURADO, rect, 2, border_radius=16)
-            render = FONTES["escolha"].render(op, True, ROSA_CLARO if hover else BRANCO)
-            surf.blit(render, (rect.centerx - render.get_width()//2, rect.y + 15))
-
-        versao = FONTES["ui"].render("v1.0", True, (100, 70, 80))
-        surf.blit(versao, (WIDTH - versao.get_width() - 10, HEIGHT - 25))
+        Menu.exibirMenu(surf, self.menu_hover)
 
     def _desenhar_fim(self, surf):
         gradiente_vertical(surf, (20, 10, 30), (60, 20, 50), (0, 0, WIDTH, HEIGHT))
@@ -340,53 +540,55 @@ class GerenciadorDeJogo:
         sub = FONTES["subtitulo"].render("Sua história de amor está apenas começando...", True, CREME)
         surf.blit(sub, (WIDTH//2 - sub.get_width()//2, 260))
 
-        for y, p in enumerate([p for p in PAQUERAS if p.afinidade > 0]):
-            label = FONTES["escolha"].render(f"♥ {p.nome}: {p.afinidade}%", True, ROSA_CLARO)
+        for y, p in enumerate([p for p in PAQUERAS if p.afinidade() > 0]):
+            label = FONTES["escolha"].render(f"♥ {p.nome}: {p.afinidade()}%", True, ROSA_CLARO)
             surf.blit(label, (WIDTH//2 - label.get_width()//2, 330 + y*40))
 
         reiniciar = FONTES["ui"].render("[ Clique para voltar ao menu ]", True, DOURADO)
         surf.blit(reiniciar, (WIDTH//2 - reiniciar.get_width()//2, HEIGHT - 80))
 
-    # ── Loop principal e Eventos ──────────────────────────────────────────────
+
     def executar(self):
         rodando = True
         while rodando:
             for evento in pygame.event.get():
                 if evento.type == pygame.QUIT: rodando = False
                 elif evento.type == pygame.MOUSEMOTION:
-                    if self.estado == "menu": self.menu_hover = next((i for i, r in enumerate(self.get_menu_rects()) if r.collidepoint(evento.pos)), -1)
-                    elif self.estado == "jogo": self.escolha_hover = next((i for i, r in enumerate(self.get_escolha_rects()) if r.collidepoint(evento.pos)), -1)
+                    if self.estadoAtual == "menu": self.menu_hover = next((i for i, r in enumerate(self.get_menu_rects()) if r.collidepoint(evento.pos)), -1)
+                    elif self.estadoAtual == "jogo": self.escolha_hover = next((i for i, r in enumerate(self.get_escolha_rects()) if r.collidepoint(evento.pos)), -1)
                 elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
-                    if self.estado == "menu":
-                        if self.get_menu_rects()[0].collidepoint(evento.pos): self.estado = "jogo"; self._iniciar_cena(0)
+                    if self.estadoAtual == "menu":
+                        if self.get_menu_rects()[0].collidepoint(evento.pos): self.iniciarNovoJogo()
                         elif self.get_menu_rects()[1].collidepoint(evento.pos): rodando = False
-                    elif self.estado == "jogo":
+                    elif self.estadoAtual == "jogo":
                         if not self.texto_pronto: self._completar_texto()
                         else:
                             rects = self.get_escolha_rects()
                             idx = next((i for i, r in enumerate(rects) if r.collidepoint(evento.pos)), -1)
                             if idx != -1:
                                 c = self._cena()
-                                if c.personagem and c.escolhas[idx][2]: c.personagem.alterar_afinidade(c.escolhas[idx][2])
-                                self._iniciar_cena(c.escolhas[idx][1])
+                                escolha = c.escolhas[idx]
+                                proxima_id, impacto = escolha.selecionarOpcao()
+                                if c.personagem and impacto: c.personagem.alterar_afinidade(impacto)
+                                self._iniciar_cena(proxima_id)
                             elif not rects:
                                 prox = self.cena_atual_id + 1
                                 if prox in CENAS: self._iniciar_cena(prox)
-                                else: self.estado = "fim"
-                    elif self.estado == "fim": self.reiniciar_jogo()
+                                else: self.estadoAtual = "fim"
+                    elif self.estadoAtual == "fim": self.reiniciar_jogo()
                 elif evento.type == pygame.KEYDOWN:
-                    if evento.key == pygame.K_ESCAPE and self.estado == "jogo": self.estado = "menu"
-                    elif evento.key in (pygame.K_RETURN, pygame.K_SPACE) and self.estado == "jogo" and not self.get_escolha_rects():
+                    if evento.key == pygame.K_ESCAPE and self.estadoAtual == "jogo": self.estadoAtual = "menu"
+                    elif evento.key in (pygame.K_RETURN, pygame.K_SPACE) and self.estadoAtual == "jogo" and not self.get_escolha_rects():
                         if not self.texto_pronto: self._completar_texto()
-                        else: self._iniciar_cena(self.cena_atual_id + 1) if (self.cena_atual_id + 1) in CENAS else setattr(self, 'estado', 'fim')
+                        else: self._iniciar_cena(self.cena_atual_id + 1) if (self.cena_atual_id + 1) in CENAS else setattr(self, 'estadoAtual', 'fim')
 
             screen.fill(PRETO)
-            if self.estado == "menu": self.desenhar_menu(screen)
-            elif self.estado == "jogo":
+            if self.estadoAtual == "menu": self.desenhar_menu(screen)
+            elif self.estadoAtual == "jogo":
                 self._desenhar_fundo(screen)
                 for p in PARTICULAS: p.atualizar(); p.desenhar(screen)
                 if self._cena().personagem: self._cena().personagem.desenhar_sprite(screen, WIDTH // 2 - 120, 60 + int(math.sin(pygame.time.get_ticks() / 1000 * 0.8) * 4))
-                self._atualizar_texto()
+                self.atualizar()
                 self._desenhar_caixa(screen)
                 self._desenhar_escolhas(screen)
                 self._desenhar_hud(screen)
@@ -394,11 +596,13 @@ class GerenciadorDeJogo:
                     fade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA); fade.fill((0, 0, 0, int(self.fade_alpha)))
                     screen.blit(fade, (0, 0))
                     if self.fade_in: self.fade_alpha = max(0, self.fade_alpha - 6); self.fade_in = self.fade_alpha > 0
-            elif self.estado == "fim": self._desenhar_fim(screen)
+            elif self.estadoAtual == "fim": self._desenhar_fim(screen)
 
             pygame.display.flip()
             clock.tick(FPS)
         pygame.quit()
 
+
 if __name__ == "__main__":
-    GerenciadorDeJogo().executar()
+    jogoAtivo = GerenciadorDeJogo(estadoAtual="Gameplay", jogador=jogador, gerenciadorAmbiente=gerenteAmbiente)
+    jogoAtivo.executar()
