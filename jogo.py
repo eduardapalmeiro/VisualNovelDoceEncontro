@@ -20,7 +20,7 @@ ROSA_CLARO   = (255, 182, 210)
 CREME        = (255, 245, 235)
 DOURADO      = (220, 170,  80)
 BRANCO       = (255, 255, 255)
-PRETO        = (  0,   0,   0)
+PRETO        = ( 0,   0,   0)
 CINZA_MEDIO  = ( 80,  60,  70)
 LILAS        = (200, 160, 220)
 
@@ -190,7 +190,7 @@ class Cena:
 
 @dataclass
 class Jogador:
-    nomeJogador: str = field(default_factory=lambda: input("Insira seu nome: "))
+    nomeJogador: str = "Jogadora"  # Valor padrão inicial
 
 @dataclass
 class Fundo:
@@ -249,7 +249,7 @@ class Menu:
         sub = FONTES["subtitulo"].render("~ Uma história de amor na faculdade ~", True, CREME)
         surf.blit(sub, (WIDTH//2 - sub.get_width()//2, 220))
 
-        rotulos = {"Novo Jogo": "♥  Começar História", "Carregar": "✿  Sair"}
+        rotulos = {"Novo Jogo": "♥   Começar História", "Sair": "✿   Sair"}
         for i, (op, rect) in enumerate(zip(self.opcoesMenu, self.get_rects())):
             hover = (i == hover_index)
             desenhar_retangulo_arredondado(surf, ROSA_ESCURO if hover else (50, 25, 40), rect, 16, 220)
@@ -345,17 +345,18 @@ FUNDO_DA_CENA = {
     18: fundo_cafeteria, 19: fundo_patio, 20: fundo_patio,
 }
 
+# Mudança crucial: Usamos a tag [NOME] para substituição dinâmica em tempo de execução
 CENAS = {
     0: Cena(None, "Primeiro dia no novo colégio. O coração acelera enquanto você empurra o portão...", ESCOLHAS[0]),
-    1: Cena(None, f"{jogador.nomeJogador} respira fundo e entra com um sorriso. Imediatamente esbarra em alguém.", ESCOLHAS[1]),
-    2: Cena(None, f"Enquanto {jogador.nomeJogador} observa o pátio nervosa, uma voz animada soa atrás dela.", ESCOLHAS[2]),
+    1: Cena(None, "[NOME] respira fundo e entra com um sorriso. Imediatamente esbarra em alguém.", ESCOLHAS[1]),
+    2: Cena(None, "Enquanto [NOME] observa o pátio nervosa, uma voz animada soa atrás dela.", ESCOLHAS[2]),
     3: Cena(catarina, "Ei! Você é nova aqui, né? Eu sou a Catarina! Bem-vinda ao colégio! Posso te mostrar o caminho?", ESCOLHAS[3]),
     4: Cena(None, "Catarina te guia pelos corredores até a sala de aula. Você logo percebe alguns rostos que chamam atenção.", ESCOLHAS[4]),
     5: Cena(talita, "Oi! Você deve ser a nova aluna. Eu sou a Talita! Se precisar de qualquer coisa, pode me chamar.", ESCOLHAS[5]),
     6: Cena(talita, "Talita sorri de volta e te aponta o lugar vago ao lado dela. 'Pode sentar aqui se quiser!'", ESCOLHAS[6]),
     7: Cena(fabiano, "Bom dia, turma! Sou o professor Fabiano. Hoje temos uma nova aluna. Por favor, se apresente.", ESCOLHAS[7]),
     8: Cena(talita, "Talita te aplaude discretamente com um sorriso genuíno. 'Gostei de você, é muito espontânea!'", ESCOLHAS[8]),
-    9: Cena(talita, "Talita te olha com uma expression gentil e acena com a cabeça, aprovando.", ESCOLHAS[9]),
+    9: Cena(talita, "Talita te olha com uma expressão gentil e acena com a cabeça, aprovando.", ESCOLHAS[9]),
     10: Cena(None, "Toca o sinal para o intervalo. A Catarina aparece correndo.", ESCOLHAS[10]),
     11: Cena(catarina, "'Vamos pra cafeteria? Dizem que o crepe de chocolate aqui é incrível!'", ESCOLHAS[11]),
     12: Cena(talita, "Na cafeteria, você encontra a Talita sentada sozinha. Ela acena e chama você para sentar junto.\nVocê pensa: 'Você é a aluna nova?'", ESCOLHAS[12]),
@@ -391,6 +392,7 @@ class GerenciadorDeJogo:
         self.fade_in = True
         self.fade_alpha = 255
         self.menu_sistema = Menu(opcoesMenu=["Novo Jogo", "Sair"], volumeMusica=0.7)
+        self.nome_input = ""  # Armazena o que está sendo digitado na tela de nome
 
     def reiniciar_jogo(self):
         self.estadoAtual = "menu"
@@ -418,7 +420,10 @@ class GerenciadorDeJogo:
             novo_fundo = FUNDO_DA_CENA.get(id_cena)
             if novo_fundo:
                 self.gerenciadorAmbiente.mudarFundo(novo_fundo)
-            self.texto_completo, self.texto_exibido = c.texto, ""
+            
+            # Aqui trocamos dinamicamente a tag [NOME] pelo nome real do jogador
+            self.texto_completo = c.texto.replace("[NOME]", self.jogador.nomeJogador)
+            self.texto_exibido = ""
             self.indice_texto, self.timer_texto = 0, 0
             self.texto_pronto, self.fade_in, self.fade_alpha = False, True, 255
 
@@ -504,6 +509,31 @@ class GerenciadorDeJogo:
     def desenhar_menu(self, surf):
         self.menu_sistema.exibirMenu(surf, self.menu_hover)
 
+    def desenhar_tela_nome(self, surf):
+        # Fundo idêntico ao menu principal para consistência visual
+        gradiente_vertical(surf, (30, 15, 25), (80, 30, 50), (0, 0, WIDTH, HEIGHT))
+        for p in PARTICULAS: p.atualizar(); p.desenhar(surf)
+        
+        titulo = FONTES["titulo"].render("Como você se chama?", True, ROSA_CLARO)
+        surf.blit(titulo, (WIDTH//2 - titulo.get_width()//2, 200))
+        
+        # Caixa de texto centralizada
+        caixa_rect = pygame.Rect(WIDTH//2 - 200, 320, 400, 50)
+        desenhar_retangulo_arredondado(surf, (50, 25, 40), caixa_rect, 12, 220)
+        pygame.draw.rect(surf, DOURADO, caixa_rect, 2, border_radius=12)
+        
+        # Renderiza o nome que está sendo digitado
+        txt_surf = FONTES["nome"].render(self.nome_input, True, BRANCO)
+        surf.blit(txt_surf, (caixa_rect.x + 15, caixa_rect.y + (caixa_rect.height - txt_surf.get_height())//2))
+        
+        # Cursor vertical piscando no final do texto
+        if (pygame.time.get_ticks() // 400) % 2 == 0:
+            cursor_x = caixa_rect.x + 15 + txt_surf.get_width() + 2
+            pygame.draw.line(surf, BRANCO, (cursor_x, caixa_rect.y + 12), (cursor_x, caixa_rect.y + 38), 2)
+            
+        dica = FONTES["texto"].render("Digite seu nome e pressione ENTER para começar", True, CREME)
+        surf.blit(dica, (WIDTH//2 - dica.get_width()//2, 410))
+
     def _desenhar_fim(self, surf):
         gradiente_vertical(surf, (20, 10, 30), (60, 20, 50), (0, 0, WIDTH, HEIGHT))
         for p in PARTICULAS: p.atualizar(); p.desenhar(surf)
@@ -525,12 +555,16 @@ class GerenciadorDeJogo:
         while rodando:
             for evento in pygame.event.get():
                 if evento.type == pygame.QUIT: rodando = False
+                
                 elif evento.type == pygame.MOUSEMOTION:
                     if self.estadoAtual == "menu": self.menu_hover = next((i for i, r in enumerate(self.get_menu_rects()) if r.collidepoint(evento.pos)), -1)
                     elif self.estadoAtual == "jogo": self.escolha_hover = next((i for i, r in enumerate(self.get_escolha_rects()) if r.collidepoint(evento.pos)), -1)
+                
                 elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                     if self.estadoAtual == "menu":
-                        if self.get_menu_rects()[0].collidepoint(evento.pos): self.iniciarNovoJogo()
+                        if self.get_menu_rects()[0].collidepoint(evento.pos): 
+                            self.estadoAtual = "nome"  # Envia para a nova tela de digitação
+                            self.nome_input = ""
                         elif self.get_menu_rects()[1].collidepoint(evento.pos): rodando = False
                     elif self.estadoAtual == "jogo":
                         if not self.texto_pronto: self._completar_texto()
@@ -548,14 +582,32 @@ class GerenciadorDeJogo:
                                 if prox in CENAS: self._iniciar_cena(prox)
                                 else: self.estadoAtual = "fim"
                     elif self.estadoAtual == "fim": self.reiniciar_jogo()
+                
+                # Tratamento de teclas para a digitação do nome e mecânicas de jogo
                 elif evento.type == pygame.KEYDOWN:
-                    if evento.key == pygame.K_ESCAPE and self.estadoAtual == "jogo": self.estadoAtual = "menu"
-                    elif evento.key in (pygame.K_RETURN, pygame.K_SPACE) and self.estadoAtual == "jogo" and not self.get_escolha_rects():
-                        if not self.texto_pronto: self._completar_texto()
-                        else: self._iniciar_cena(self.cena_atual_id + 1) if (self.cena_atual_id + 1) in CENAS else setattr(self, 'estadoAtual', 'fim')
+                    if self.estadoAtual == "nome":
+                        if evento.key == pygame.K_RETURN:
+                            nome_final = self.nome_input.strip()
+                            if nome_final: 
+                                self.iniciarNovoJogo(nome_final)
+                        elif evento.key == pygame.K_BACKSPACE:
+                            self.nome_input = self.nome_input[:-1]
+                        elif evento.key == pygame.K_ESCAPE:
+                            self.estadoAtual = "menu"
+                        else:
+                            # Limita o tamanho máximo do nome para 15 caracteres (evita quebrar a interface)
+                            if len(self.nome_input) < 15 and evento.unicode.isprintable():
+                                self.nome_input += evento.unicode
+                                
+                    elif self.estadoAtual == "jogo":
+                        if evento.key == pygame.K_ESCAPE: self.estadoAtual = "menu"
+                        elif evento.key in (pygame.K_RETURN, pygame.K_SPACE) and not self.get_escolha_rects():
+                            if not self.texto_pronto: self._completar_texto()
+                            else: self._iniciar_cena(self.cena_atual_id + 1) if (self.cena_atual_id + 1) in CENAS else setattr(self, 'estadoAtual', 'fim')
 
             screen.fill(PRETO)
             if self.estadoAtual == "menu": self.desenhar_menu(screen)
+            elif self.estadoAtual == "nome": self.desenhar_tela_nome(screen)
             elif self.estadoAtual == "jogo":
                 self._desenhar_fundo(screen)
                 for p in PARTICULAS: p.atualizar(); p.desenhar(screen)
@@ -578,6 +630,5 @@ class GerenciadorDeJogo:
 
 
 if __name__ == "__main__":
-    # Mudado de "Gameplay" para "menu" para iniciar na tela inicial corretamente
     jogoAtivo = GerenciadorDeJogo(estadoAtual="menu", jogador=jogador, gerenciadorAmbiente=gerenteAmbiente)
     jogoAtivo.executar()
