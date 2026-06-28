@@ -119,7 +119,7 @@ class Personagem:
     id: int
     nome: str
     expressao: str = "normal"
-    _afinidade = 0
+    _afinidade: int = 0
 
     def afinidade(self) -> int:
         return self._afinidade
@@ -156,30 +156,22 @@ class Personagem:
 
 @dataclass
 class Amigo(Personagem):
-    nivelDeAmizade: int
-
-    @property
-    def nivelDeAmizade(self):
-        return self._afinidade
+    nivelDeAmizade: int = 0
 
     def afinidade(self) -> int:
         return self.nivelDeAmizade
 
 @dataclass
 class InteresseAmoroso(Personagem):
-    nivelDeAmizade: int
-    nivelDeAfinidade: int
-
-    @property
-    def nivelDeAmizade(self):
-        return self._afinidade
+    nivelDeAmizade: int = 0
+    nivelDeAfinidade: int = 0
 
     def afinidade(self) -> int:
-        return self.nivelDeAmizade
+        return self.nivelDeAfinidade
 
     def alterar_afinidade(self, valor):
         super().alterar_afinidade(valor)
-        self.nivelDeAmor = max(0, min(100, self.nivelDeAmor + valor))
+        self.nivelDeAfinidade = max(0, min(100, self.nivelDeAfinidade + valor))
 
 @dataclass
 class Escolhas:
@@ -194,11 +186,11 @@ class Escolhas:
 class Cena:
     personagem: Personagem | None
     texto: str
-    escolhas: Escolhas
+    escolhas: list
 
 @dataclass
 class Jogador:
-    nomej: str = input("Insira seu nome: ")
+    nomeJogador: str = field(default_factory=lambda: input("Insira seu nome: "))
 
 @dataclass
 class Fundo:
@@ -232,19 +224,19 @@ class Audio:
             self._carregado = False
 
     def pausar(self):
-        if self._carregado:
+        if getattr(self, '_carregado', False):
             try: pygame.mixer.music.pause()
             except: pass
 
     def parar(self):
-        if self._carregado:
+        if getattr(self, '_carregado', False):
             try: pygame.mixer.music.stop()
             except: pass
     
 @dataclass
 class Menu:
     opcoesMenu: list
-    volumeMusica: int
+    volumeMusica: float
 
     def get_rects(self):
         return [pygame.Rect(WIDTH//2-180, 340 + i*80, 360, 52) for i in range(len(self.opcoesMenu))]
@@ -268,18 +260,6 @@ class Menu:
         versao = FONTES["ui"].render("v1.0", True, (100, 70, 80))
         surf.blit(versao, (WIDTH - versao.get_width() - 10, HEIGHT - 25))
 
-    def clicarNovoJogo(self):
-        return "jogo"
-
-    def clicarCarregarJogo(self):
-        return "jogo"
-
-    def ajustarVolume(self, novoVolume: float):
-        self.volumeMusica = novoVolume
-
-    def clicarSair(self):
-        return False
-
 @dataclass
 class Pause:
     visivel: bool = False
@@ -296,21 +276,11 @@ class Pause:
         dica = FONTES["ui"].render("Pressione P ou ESC para continuar", True, CREME)
         surf.blit(dica, (WIDTH//2 - dica.get_width()//2, HEIGHT//2))
 
-    def clicarRetomar(self):
-        self.visivel = False
-
-    def clicarSalvarProgresso(self):
-        pass
-
-    def clicarSairParaMenu(self):
-        self.visivel = False
-        return "menu"
-    
 @dataclass
 class GerenciadorDeAmbiente:
     fundoAtual: Fundo
     audioAtual: Audio
-    cenaAtual: Cena
+    cenaAtual: Cena | None = None
 
     def mudarFundo(self, novoFundo: Fundo):
         self.fundoAtual = novoFundo
@@ -327,7 +297,7 @@ class GerenciadorDeAmbiente:
 # ─── Objetos ───────────────────────────────────────────────────────────
 jogador = Jogador()
 
-talita  = InteresseAmoroso(1, "Talita")
+talita   = InteresseAmoroso(1, "Talita")
 victoria = InteresseAmoroso(2, "Victoria")
 victor   = InteresseAmoroso(3, "Victor")
 talisson = InteresseAmoroso(4, "Talisson")
@@ -385,7 +355,7 @@ CENAS = {
     6: Cena(talita, "Talita sorri de volta e te aponta o lugar vago ao lado dela. 'Pode sentar aqui se quiser!'", ESCOLHAS[6]),
     7: Cena(fabiano, "Bom dia, turma! Sou o professor Fabiano. Hoje temos uma nova aluna. Por favor, se apresente.", ESCOLHAS[7]),
     8: Cena(talita, "Talita te aplaude discretamente com um sorriso genuíno. 'Gostei de você, é muito espontânea!'", ESCOLHAS[8]),
-    9: Cena(talita, "Talita te olha com uma expressão gentil e acena com a cabeça, aprovando.", ESCOLHAS[9]),
+    9: Cena(talita, "Talita te olha com uma expression gentil e acena com a cabeça, aprovando.", ESCOLHAS[9]),
     10: Cena(None, "Toca o sinal para o intervalo. A Catarina aparece correndo.", ESCOLHAS[10]),
     11: Cena(catarina, "'Vamos pra cafeteria? Dizem que o crepe de chocolate aqui é incrível!'", ESCOLHAS[11]),
     12: Cena(talita, "Na cafeteria, você encontra a Talita sentada sozinha. Ela acena e chama você para sentar junto.\nVocê pensa: 'Você é a aluna nova?'", ESCOLHAS[12]),
@@ -400,20 +370,27 @@ CENAS = {
 }
 
 gerenteAmbiente = GerenciadorDeAmbiente(saladeaula, musica_sala)
+
 # ─── Motor do jogo ──────────────────────────────────────────────────────────────
 @dataclass
 class GerenciadorDeJogo:
-    estadoAtual = str
-    jogador = Jogador
-    gerenciadorAmbiente = GerenciadorDeAmbiente
+    estadoAtual: str
+    jogador: Jogador
+    gerenciadorAmbiente: GerenciadorDeAmbiente
+    velocidade_texto: int = 1
 
-    @property
-    def estado(self):
-        return self.estadoAtual
-
-    @estado.setter
-    def estado(self, valor):
-        self.estadoAtual = valor
+    def __post_init__(self):
+        self.menu_hover = -1
+        self.escolha_hover = -1
+        self.cena_atual_id = 0
+        self.texto_completo = ""
+        self.texto_exibido = ""
+        self.indice_texto = 0
+        self.timer_texto = 0
+        self.texto_pronto = False
+        self.fade_in = True
+        self.fade_alpha = 255
+        self.menu_sistema = Menu(opcoesMenu=["Novo Jogo", "Sair"], volumeMusica=0.7)
 
     def reiniciar_jogo(self):
         self.estadoAtual = "menu"
@@ -425,23 +402,25 @@ class GerenciadorDeJogo:
         return CENAS.get(self.cena_atual_id)
 
     def get_menu_rects(self):
-        return Menu.get_rects()
+        return self.menu_sistema.get_rects()
 
     def get_escolha_rects(self):
         c = self._cena()
-        if not (self.texto_pronto and c.escolhas): return []
+        if not (self.texto_pronto and c and c.escolhas): return []
         start_y = HEIGHT - 220 - len(c.escolhas) * 52 - 15
         return [pygame.Rect(WIDTH//2-310, start_y + i * 52, 620, 44) for i in range(len(c.escolhas))]
 
     def _iniciar_cena(self, id_cena):
         self.cena_atual_id = id_cena
-        self.gerenciadorAmbiente.carregarCena(self._cena())
-        novo_fundo = FUNDO_DA_CENA.get(id_cena)
-        if novo_fundo:
-            self.gerenciadorAmbiente.mudarFundo(novo_fundo)
-        self.texto_completo, self.texto_exibido = self._cena().texto, ""
-        self.indice_texto, self.timer_texto = 0, 0
-        self.texto_pronto, self.fade_in, self.fade_alpha = False, True, 255
+        c = self._cena()
+        if c:
+            self.gerenciadorAmbiente.carregarCena(c)
+            novo_fundo = FUNDO_DA_CENA.get(id_cena)
+            if novo_fundo:
+                self.gerenciadorAmbiente.mudarFundo(novo_fundo)
+            self.texto_completo, self.texto_exibido = c.texto, ""
+            self.indice_texto, self.timer_texto = 0, 0
+            self.texto_pronto, self.fade_in, self.fade_alpha = False, True, 255
 
     def _completar_texto(self):
         self.texto_exibido, self.indice_texto, self.texto_pronto = self.texto_completo, len(self.texto_completo), True
@@ -455,33 +434,25 @@ class GerenciadorDeJogo:
                 self.texto_exibido = self.texto_completo[:self.indice_texto]
                 if self.indice_texto >= len(self.texto_completo): self.texto_pronto = True
 
-
     def iniciarNovoJogo(self, nomeJogador: str = None):
         if nomeJogador:
             self.jogador.nomeJogador = nomeJogador
         self.estadoAtual = "jogo"
         self._iniciar_cena(0)
 
-    def pausarJogo(self):
-        Pause.visivel = True
-        self._estado_antes_pausa = self.estadoAtual
-
-    def despausarJogo(self):
-        Pause.visivel = False
-
     def irParaMenu(self):
-        Pause.visivel = False
         self.estadoAtual = "menu"
 
     def atualizar(self):
         self._atualizar_texto()
 
-
     def _desenhar_fundo(self, surf):
         self.gerenciadorAmbiente.fundoAtual.exibir(surf)
 
     def _desenhar_caixa(self, surf):
-        c, box_y, box_h = self._cena(), HEIGHT - 220, 215
+        c = self._cena()
+        if not c: return
+        box_y, box_h = HEIGHT - 220, 215
         caixa = pygame.Surface((WIDTH, box_h), pygame.SRCALPHA)
         pygame.draw.rect(caixa, (15, 8, 12, 215), (0, 0, WIDTH, box_h))
         pygame.draw.line(caixa, (*ROSA, 100), (0, 0), (WIDTH, 0), 2)
@@ -504,7 +475,9 @@ class GerenciadorDeJogo:
             surf.blit(seta, (WIDTH - seta.get_width() - 30, box_y + box_h - 28))
 
     def _desenhar_escolhas(self, surf):
-        for i, (rect, escolha) in enumerate(zip(self.get_escolha_rects(), self._cena().escolhas)):
+        c = self._cena()
+        if not c: return
+        for i, (rect, escolha) in enumerate(zip(self.get_escolha_rects(), c.escolhas)):
             hover = (i == self.escolha_hover)
             desenhar_retangulo_arredondado(surf, ROSA_ESCURO if hover else (40, 20, 30), rect, 14, 225)
             if hover: pygame.draw.rect(surf, DOURADO, rect, 2, border_radius=14)
@@ -529,7 +502,7 @@ class GerenciadorDeJogo:
             x += 200
 
     def desenhar_menu(self, surf):
-        Menu.exibirMenu(surf, self.menu_hover)
+        self.menu_sistema.exibirMenu(surf, self.menu_hover)
 
     def _desenhar_fim(self, surf):
         gradiente_vertical(surf, (20, 10, 30), (60, 20, 50), (0, 0, WIDTH, HEIGHT))
@@ -546,7 +519,6 @@ class GerenciadorDeJogo:
 
         reiniciar = FONTES["ui"].render("[ Clique para voltar ao menu ]", True, DOURADO)
         surf.blit(reiniciar, (WIDTH//2 - reiniciar.get_width()//2, HEIGHT - 80))
-
 
     def executar(self):
         rodando = True
@@ -587,7 +559,9 @@ class GerenciadorDeJogo:
             elif self.estadoAtual == "jogo":
                 self._desenhar_fundo(screen)
                 for p in PARTICULAS: p.atualizar(); p.desenhar(screen)
-                if self._cena().personagem: self._cena().personagem.desenhar_sprite(screen, WIDTH // 2 - 120, 60 + int(math.sin(pygame.time.get_ticks() / 1000 * 0.8) * 4))
+                c_atual = self._cena()
+                if c_atual and c_atual.personagem: 
+                    c_atual.personagem.desenhar_sprite(screen, WIDTH // 2 - 120, 60 + int(math.sin(pygame.time.get_ticks() / 1000 * 0.8) * 4))
                 self.atualizar()
                 self._desenhar_caixa(screen)
                 self._desenhar_escolhas(screen)
@@ -604,5 +578,6 @@ class GerenciadorDeJogo:
 
 
 if __name__ == "__main__":
-    jogoAtivo = GerenciadorDeJogo(estadoAtual="Gameplay", jogador=jogador, gerenciadorAmbiente=gerenteAmbiente)
+    # Mudado de "Gameplay" para "menu" para iniciar na tela inicial corretamente
+    jogoAtivo = GerenciadorDeJogo(estadoAtual="menu", jogador=jogador, gerenciadorAmbiente=gerenteAmbiente)
     jogoAtivo.executar()
